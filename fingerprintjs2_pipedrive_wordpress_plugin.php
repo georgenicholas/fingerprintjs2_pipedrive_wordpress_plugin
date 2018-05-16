@@ -13,7 +13,7 @@
    /*TODO:
    - load js library async
    - add ability to do gated content
-   -- should try to find person in pipedrive from email and fingerprint from submission
+   -- should try to find person in pipedrive from email and fingerprint from submission and tie them to original record.
    --- if it finds them, it adds the new data to them.
    - doesn't seem to work in chrome
    - update mailchimp updater to include user IDs so I can create dynamic URLs for them
@@ -110,7 +110,8 @@ function fingerprinting_ajax_request() {
       }
       else {
         debug('create new user in pipedrive with fingerprint');
-        $user = create_user_by_fingerprint($fingerprint);
+        $data = '{"name": "Unknown", "visible_to": "3", "26dccb2d4b7b701a77f418266af26599c970a414":"' . $fingerprint . '"}';
+        $user = create_pipedrive_user($data);
         record_hit_by_user_id($user["data"]["id"]);
       }
     }
@@ -206,21 +207,61 @@ function clean_user_fingerprints($user_fingerprints) {
   return array_unique(array_filter(str_replace(' ', '', $user_fingerprints)));
 }
 
-function create_user_by_fingerprint($fingerprint) {
+function create_pipedrive_user($data) {
   $url = 'https://api.pipedrive.com/v1/persons?api_token=' . DB_PIPEDRIVE_API_KEY;
-  $data = '{"name": "Unknown", "visible_to": "3", "26dccb2d4b7b701a77f418266af26599c970a414":"' . $fingerprint . '"}';
   $response = json_decode(curl_request_pipedrive("POST", $url, $data), true);
   debug('added new user was a success:'.$response['success']);
   return $response;
 }
 
+function create_deal() {
+  $url = 'https://api.pipedrive.com/v1/deals?api_token=' . DB_PIPEDRIVE_API_KEY;
+
+}
+
 function find_user_id_by_email($email) {
-  // for gated content
   $url = 'https://api.pipedrive.com/v1/persons/find?term=' . $email . '&start=0&search_by_email=1&api_token=' . DB_PIPEDRIVE_API_KEY;
   $data = null;
   $response = json_decode(curl_request_pipedrive("GET", $url, $data), true);
+  return $response['data']['id'];
+}
 
+function form_submitted() {
+  $email
+  $details
+  $name
+  $company_name
+  $fingerprint
 
+  $user_id = find_user_id_by_email($email);
+  if (!isset(find_user_id_by_email($email))) {
+    $user_id_array = find_user_ids_by_fingerprint($fingerprint);
+    if (count($user_id_array) >= 2) {
+      $user_id = merge_2_users($user_id_array[0], $user_id_array[1]);
+    }
+    elseif (isset($user_id_array[0])) {
+      debug('didnt find any duplicates');
+      $user_id = $user_id_array[0];
+    }
+  }
+  elseif (isset(find_user_id_by_email($email))) {
+    $user_fingerprints = get_user_fingerprints_by_id($user_id);
+    array_push($user_fingerprints,$fingerprint);
+    set_user_fingerprints_by_id($user_fingerprints, $user_id);
+    record_hit_by_user_id($user_id);
+    debug('check for duplicates');
+    $user_id_array = find_user_ids_by_fingerprint($fingerprint); //returns array of user ids.
+    if (count($user_id_array) >= 2) {
+      merge_2_users($user_id_array[0], $user_id_array[1]);
+    }
+    else {
+      debug('didnt find any duplicates');
+    }
+  }
+  else {
+    $user_id = create_pipedrive_user('{"name": "' . $name . '", "email": "' . $email . '" "visible_to": "3", "26dccb2d4b7b701a77f418266af26599c970a414":"' . $fingerprint . '"}');
+  }
+  create_deal('{"title": "Website Form Submitted", "person_id": "' . $user_id . '", "visible_to": "3"}');
 }
 
 function curl_request_pipedrive($request_type, $url, $data) {
