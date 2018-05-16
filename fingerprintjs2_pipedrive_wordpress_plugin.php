@@ -214,6 +214,15 @@ function create_user_by_fingerprint($fingerprint) {
   return $response;
 }
 
+function find_user_id_by_email($email) {
+  // for gated content
+  $url = 'https://api.pipedrive.com/v1/persons/find?term=' . $email . '&start=0&search_by_email=1&api_token=' . DB_PIPEDRIVE_API_KEY;
+  $data = null;
+  $response = json_decode(curl_request_pipedrive("GET", $url, $data), true);
+
+
+}
+
 function curl_request_pipedrive($request_type, $url, $data) {
   debug('calling pipedrive');
   $ch = curl_init($url);
