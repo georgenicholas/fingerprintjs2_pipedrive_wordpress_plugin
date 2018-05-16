@@ -86,26 +86,38 @@ function fingerprinting_ajax_request() {
     debug('fingerprint: '.$fingerprint.' user id: '.$user_id.' company id: '.$company_id);
     if (isset($user_id) && isset($fingerprint)) {
       debug('found finerprint and user id');
-      set_user_fingerprint($fingerprint, $user_id);
-      record_hit($user_id);
+      set_user_fingerprint_by_id($fingerprint, $user_id);
+      record_hit_by_user_id($user_id);
+      debug('check for duplicates');
+      $user_id_array = find_user_ids_by_fingerprint($fingerprint); //returns array of user ids.
+      debug($user_id_array);
+      debug(count($user_id_array));
+      if (count($user_id_array) >= 2) {
+        merge_2_users($user_id_array[0], $user_id_array[1]);
+      }
+      else {
+        debug('didnt find any duplicates');
+      }
     }
     elseif (isset($fingerprint)) {
       debug('no user id present, using fingerprint only');
-      $user_id = check_if_fingerprint_exists($fingerprint);
-      if ($user_id != false) {
-        record_hit($user_id);
+      $user_id_array = find_user_ids_by_fingerprint($fingerprint);
+      if (is_array($user_id_array)) {
+        foreach($user_id_array as $user_id) {
+          record_hit_by_user_id($user_id);
+        }
       }
       else {
         debug('create new user in pipedrive with fingerprint');
-        $user = pipedrive_create_user($fingerprint);
-        record_hit($user["data"]["id"]);
+        $user = create_user_by_fingerprint($fingerprint);
+        record_hit_by_user_id($user["data"]["id"]);
       }
     }
   }
   die();
 }
 
-function record_hit($user_id) {
+function record_hit_by_user_id($user_id) {
   debug('record hit');
   $url = 'https://api.pipedrive.com/v1/activities?api_token=' . DB_PIPEDRIVE_API_KEY;
   $data = '{
@@ -118,15 +130,18 @@ function record_hit($user_id) {
   debug('recorded hit successfully:'.$response['success']);
 }
 
-function check_if_fingerprint_exists($fingerprint) {
+function find_user_ids_by_fingerprint($fingerprint) {
   debug('check if finger print exists');
   $url = 'https://api.pipedrive.com/v1/searchResults/field?term=' . $fingerprint . '&exact_match=0&field_type=personField&field_key=26dccb2d4b7b701a77f418266af26599c970a414&return_item_ids=1&start=0&api_token=' . DB_PIPEDRIVE_API_KEY;
   $data = null;
   $response = json_decode(curl_request_pipedrive("GET", $url, $data), true);
+  debug('check if there are any fingerprint matches in pipedrive');
   if (isset($response['data'][0]['id'])) {
-    debug('found fingerprint in pipedrive!');
-    $user_id = $response['data'][0]['id'];
-    return $user_id;
+    $user_id_array = [];
+    foreach($response['data'] as $user_id) {
+      array_push($user_id_array,$user_id['id']);
+    }
+    return $user_id_array;
   }
   else {
     debug('cant find fingerprint');
@@ -134,11 +149,33 @@ function check_if_fingerprint_exists($fingerprint) {
   }
 }
 
+function merge_2_users($user_id1, $user_id2) {
+  // maintain the oldest user by lowest ID number
+  if ($user_id1 < $user_id2) {
+    $user_to_be_merged = $user_id2;
+    $user_id = $user_id1;
+  }
+  else {
+    $user_to_be_merged = $user_id1;
+    $user_id = $user_id2;
+  }
+  debug('user ' . $user_to_be_merged . ' to be merged into ' . $user_id);
+  $url = 'https://api.pipedrive.com/v1/persons/' . $user_to_be_merged . '/merge?api_token=' . DB_PIPEDRIVE_API_KEY;
+  $data = '{"merge_with_id":"' . $user_id . '"}';
+  $response = json_decode(curl_request_pipedrive("PUT", $url, $data), true);
+  debug('merged users success status: '.$response['success']);
+  $user_fingerprints = get_user_fingerprints_by_id($user_id);
+  foreach ($user_fingerprints as $fingerprint) {
+    set_user_fingerprint_by_id($fingerprint, $user_id);
+  }
+  return $user_id;
+}
+
 // Set's a user's fingerprints
-function set_user_fingerprint($fingerprint, $user_id) {
+function set_user_fingerprint_by_id($fingerprint, $user_id) {
   debug('set user fingerprints');
   debug('get users current logged fingerprints');
-  $user_fingerprints = get_users_fingerprints($user_id);
+  $user_fingerprints = get_user_fingerprints_by_id($user_id);
   debug('did the user already have fingerprints?');
   if (isset($user_fingerprints)) {
     debug('the user already had fingerprints, is the new one unique?');
@@ -156,7 +193,7 @@ function set_user_fingerprint($fingerprint, $user_id) {
     $user_fingerprints = [];
     array_push($user_fingerprints,$fingerprint);
   }
-
+  $user_fingerprints = clean_user_fingerprints($user_fingerprints);
   debug('flatten array to string');
   $user_fingerprints_string = implode(",",$user_fingerprints);
   debug('submit fingerprints to pipedrive');
@@ -167,7 +204,7 @@ function set_user_fingerprint($fingerprint, $user_id) {
 }
 
 // Returns an array of a user's fingerprints
-function get_users_fingerprints($user_id) {
+function get_user_fingerprints_by_id($user_id) {
   debug('get users fingerprints');
   $url = 'https://api.pipedrive.com/v1/persons/' . $user_id . '?api_token=' . DB_PIPEDRIVE_API_KEY;
   $data = null;
@@ -183,7 +220,13 @@ function get_users_fingerprints($user_id) {
   }
 }
 
-function pipedrive_create_user($fingerprint) {
+function clean_user_fingerprints($user_fingerprints) {
+  debug('clean users fingerprints');
+  //remove excess spaces and duplicates
+  return array_unique(array_filter(str_replace(' ', '', $user_fingerprints)));
+}
+
+function create_user_by_fingerprint($fingerprint) {
   $url = 'https://api.pipedrive.com/v1/persons?api_token=' . DB_PIPEDRIVE_API_KEY;
   $data = '{"name": "Unknown", "visible_to": "3", "26dccb2d4b7b701a77f418266af26599c970a414":"' . $fingerprint . '"}';
   $response = json_decode(curl_request_pipedrive("POST", $url, $data), true);
