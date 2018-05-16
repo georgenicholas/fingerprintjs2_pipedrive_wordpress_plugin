@@ -12,10 +12,25 @@
 
    /*TODO:
    - load js library async
+   - add ability to do gated content
+   -- should try to find person in pipedrive from email and fingerprint from submission
+   --- if it finds them, it adds the new data to them.
+   - add function so that if it can't find someone with the fingerprint, it creates a new person in pipedrive.  Just for historical purposes
+   - should merge people who have the same fingerprint.
 
    NOTE: User Storie:
-   - When a user visits the site for the first time
-   --
+   - When a user visits the site wtih no arguments
+   -- the program trys to find that user's fingerprint in pipedrive.
+   --- if it can't it does nothing.
+   --- if it can, it adds a hit to that user it finds
+   - When a user visits the site with a user ID argument
+   -- the program trys to get that user
+   --- if it finds and gets the user, it looks to see if that user has a fingerprint
+   ---- if the user has a fingrprint, it gets the fingerprint and sees if their old fingerprint matches their new one.
+   ----- if the fingerprints match, it does nothing
+   ----- if the fingerprints don't match, it adds the new fingerprint to the array with the old fingerprints and adds those to the user
+   ---
+   */
 
 
    // Async load
@@ -56,7 +71,6 @@
 		array('jquery')
 	);
   wp_enqueue_script( 'fingerprintjs2', 'https://cdn.jsdelivr.net/npm/fingerprintjs2@1.8.0/dist/fingerprint2.min.js');
-	// The wp_localize_script allows us to output the ajax_url path for our script to use.
 	wp_localize_script(
 		'fingerprinting',
 		'fingerprinting_ajax_obj',
@@ -77,7 +91,6 @@ function fingerprinting_ajax_request() {
       record_hit($user_id);
     }
     elseif (isset($fingerprint)) {
-      // try to find visitor by fingerprint
       debug('no user id present, using fingerprint only');
       $user_id = check_if_fingerprint_exists($fingerprint);
       if ($user_id != false) {
@@ -89,6 +102,7 @@ function fingerprinting_ajax_request() {
 }
 
 function curl_request_pipedrive($request_type, $url, $data) {
+  debug('calling pipedrive');
   $ch = curl_init($url);
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
   curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $request_type);
@@ -96,7 +110,6 @@ function curl_request_pipedrive($request_type, $url, $data) {
   curl_setopt($ch, CURLOPT_POST,           1 );
   curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
   return curl_exec($ch);
-
 }
 
 function record_hit($user_id) {
@@ -109,6 +122,7 @@ function record_hit($user_id) {
     "person_id": "' . $user_id . '"
   }';
   $response = curl_request_pipedrive("POST", $url, $data);
+  debug('recorded hit successfully:'.$response['success']);
 }
 
 function check_if_fingerprint_exists($fingerprint) {
