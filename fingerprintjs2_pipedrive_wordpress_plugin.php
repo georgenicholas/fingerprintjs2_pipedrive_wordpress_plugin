@@ -15,7 +15,6 @@
    - add ability to do gated content
    -- should try to find person in pipedrive from email and fingerprint from submission
    --- if it finds them, it adds the new data to them.
-   - add function so that if it can't find someone with the fingerprint, it creates a new person in pipedrive.  Just for historical purposes
    - should merge people who have the same fingerprint.
 
    NOTE: User Storie:
@@ -96,20 +95,14 @@ function fingerprinting_ajax_request() {
       if ($user_id != false) {
         record_hit($user_id);
       }
+      else {
+        debug('create new user in pipedrive with fingerprint');
+        $user = pipedrive_create_user($fingerprint);
+        record_hit($user["data"]["id"]);
+      }
     }
   }
   die();
-}
-
-function curl_request_pipedrive($request_type, $url, $data) {
-  debug('calling pipedrive');
-  $ch = curl_init($url);
-  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-  curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $request_type);
-  curl_setopt($ch, CURLOPT_HTTPHEADER, array('Accept: application/json;', 'Content-Type: application/json'));
-  curl_setopt($ch, CURLOPT_POST,           1 );
-  curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-  return curl_exec($ch);
 }
 
 function record_hit($user_id) {
@@ -136,7 +129,7 @@ function check_if_fingerprint_exists($fingerprint) {
     return $user_id;
   }
   else {
-    debug('cant find fingerprint, end program');
+    debug('cant find fingerprint');
     return false;
   }
 }
@@ -188,6 +181,25 @@ function get_users_fingerprints($user_id) {
     debug('user has no fingerprints');
     return null;
   }
+}
+
+function pipedrive_create_user($fingerprint) {
+  $url = 'https://api.pipedrive.com/v1/persons?api_token=' . DB_PIPEDRIVE_API_KEY;
+  $data = '{"name": "Unknown", "visible_to": "3", "26dccb2d4b7b701a77f418266af26599c970a414":"' . $fingerprint . '"}';
+  $response = json_decode(curl_request_pipedrive("POST", $url, $data), true);
+  debug('added new user was a success:'.$response['success']);
+  return $response;
+}
+
+function curl_request_pipedrive($request_type, $url, $data) {
+  debug('calling pipedrive');
+  $ch = curl_init($url);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+  curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $request_type);
+  curl_setopt($ch, CURLOPT_HTTPHEADER, array('Accept: application/json;', 'Content-Type: application/json'));
+  curl_setopt($ch, CURLOPT_POST,           1 );
+  curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+  return curl_exec($ch);
 }
 
 add_action( 'wp_ajax_nopriv_fingerprinting_ajax_request', 'fingerprinting_ajax_request' );
