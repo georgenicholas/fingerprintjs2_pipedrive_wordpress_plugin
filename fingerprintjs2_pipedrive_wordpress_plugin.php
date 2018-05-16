@@ -15,7 +15,8 @@
    - add ability to do gated content
    -- should try to find person in pipedrive from email and fingerprint from submission
    --- if it finds them, it adds the new data to them.
-   - should merge people who have the same fingerprint.
+   - doesn't seem to work in chrome
+   - update mailchimp updater to include user IDs so I can create dynamic URLs for them
 
    NOTE: User Storie:
    - When a user visits the site wtih no arguments
@@ -86,12 +87,12 @@ function fingerprinting_ajax_request() {
     debug('fingerprint: '.$fingerprint.' user id: '.$user_id.' company id: '.$company_id);
     if (isset($user_id) && isset($fingerprint)) {
       debug('found finerprint and user id');
-      set_user_fingerprint_by_id($fingerprint, $user_id);
+      $user_fingerprints = get_user_fingerprints_by_id($user_id);
+      array_push($user_fingerprints,$fingerprint);
+      set_user_fingerprints_by_id($user_fingerprints, $user_id);
       record_hit_by_user_id($user_id);
       debug('check for duplicates');
       $user_id_array = find_user_ids_by_fingerprint($fingerprint); //returns array of user ids.
-      debug($user_id_array);
-      debug(count($user_id_array));
       if (count($user_id_array) >= 2) {
         merge_2_users($user_id_array[0], $user_id_array[1]);
       }
@@ -165,40 +166,19 @@ function merge_2_users($user_id1, $user_id2) {
   $response = json_decode(curl_request_pipedrive("PUT", $url, $data), true);
   debug('merged users success status: '.$response['success']);
   $user_fingerprints = get_user_fingerprints_by_id($user_id);
-  foreach ($user_fingerprints as $fingerprint) {
-    set_user_fingerprint_by_id($fingerprint, $user_id);
-  }
+  set_user_fingerprints_by_id($user_fingerprints, $user_id);
   return $user_id;
 }
 
 // Set's a user's fingerprints
-function set_user_fingerprint_by_id($fingerprint, $user_id) {
+function set_user_fingerprints_by_id($fingerprints, $user_id) {
   debug('set user fingerprints');
-  debug('get users current logged fingerprints');
-  $user_fingerprints = get_user_fingerprints_by_id($user_id);
-  debug('did the user already have fingerprints?');
-  if (isset($user_fingerprints)) {
-    debug('the user already had fingerprints, is the new one unique?');
-    if (in_array($fingerprint, $user_fingerprints)) {
-      debug('the fingerprint has already been logged, return');
-      return;
-    }
-    else {
-      debug('the user already has fingerprints, but this new one is unique and should be added');
-      array_push($user_fingerprints,$fingerprint);
-    }
-  }
-  else {
-    debug('this user has no fingerprints, so this new fingerprint must be unique.');
-    $user_fingerprints = [];
-    array_push($user_fingerprints,$fingerprint);
-  }
-  $user_fingerprints = clean_user_fingerprints($user_fingerprints);
+  $fingerprints = clean_user_fingerprints($fingerprints);
   debug('flatten array to string');
-  $user_fingerprints_string = implode(",",$user_fingerprints);
+  $fingerprints_string = implode(",",$fingerprints);
   debug('submit fingerprints to pipedrive');
   $url = 'https://api.pipedrive.com/v1/persons/' . $user_id . '?api_token=' . DB_PIPEDRIVE_API_KEY;
-  $data = '{"26dccb2d4b7b701a77f418266af26599c970a414":"' . $user_fingerprints_string . '"}';
+  $data = '{"26dccb2d4b7b701a77f418266af26599c970a414":"' . $fingerprints_string . '"}';
   $response = json_decode(curl_request_pipedrive("PUT", $url, $data), true);
   debug('added fingerprints to user was a success:'.$response['success']);
 }
