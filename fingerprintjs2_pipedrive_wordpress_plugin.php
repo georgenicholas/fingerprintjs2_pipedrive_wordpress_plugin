@@ -17,6 +17,7 @@
    --- if it finds them, it adds the new data to them.
    - doesn't seem to work in chrome
    - update mailchimp updater to include user IDs so I can create dynamic URLs for them
+   - make post submission stuff async: https://github.com/techcrunch/wp-async-task
 
    NOTE: User Storie:
    - When a user visits the site wtih no arguments
@@ -52,16 +53,13 @@
    //   // wp_localize_script( 'finterprintjs2_pipedrive_wp', 'fingerprint_obj', array('ajaxurl' => admin_url( 'admin-ajax.php' )));
    // }
    // add_action( 'wp_enqueue_scripts', 'enqueue_scripts' );
-   function debug($message) {
-     if (DB_HOST == 'localhost') {
-       if (is_array($message)) {
-         print_r(json_encode($message));
-       }
-       else {
-         print_r(' | '.$message.' | ');
-       }
-     }
-   }
+
+   add_action('init', 'myStartSession', 1);
+    function myStartSession() {
+        if(!session_id()) {
+            session_start();
+        }
+    }
 
    function fingerprinting_enqueue() {
 	// Enqueue javascript on the frontend.
@@ -84,24 +82,26 @@ function fingerprinting_ajax_request() {
     $fingerprint = $_REQUEST['fingerprint'];
     $user_id = $_REQUEST['user_id'];
     $company_id = $_REQUEST['company_id'];
-    debug('fingerprint: '.$fingerprint.' user id: '.$user_id.' company id: '.$company_id);
+    $fingerprint_global = $fingerprint;
+    $_SESSION["fingerprint_session"] = $fingerprint;
+    write_log('fingerprint: '.$fingerprint.' user id: '.$user_id.' company id: '.$company_id);
     if (isset($user_id) && isset($fingerprint)) {
-      debug('found finerprint and user id');
+      write_log('found finerprint and user id');
       $user_fingerprints = get_user_fingerprints_by_id($user_id);
       array_push($user_fingerprints,$fingerprint);
       set_user_fingerprints_by_id($user_fingerprints, $user_id);
       record_hit_by_user_id($user_id);
-      debug('check for duplicates');
+      write_log('check for duplicates');
       $user_id_array = find_user_ids_by_fingerprint($fingerprint); //returns array of user ids.
       if (count($user_id_array) >= 2) {
         merge_2_users($user_id_array[0], $user_id_array[1]);
       }
       else {
-        debug('didnt find any duplicates');
+        write_log('didnt find any duplicates');
       }
     }
     elseif (isset($fingerprint)) {
-      debug('no user id present, using fingerprint only');
+      write_log('no user id present, using fingerprint only');
       $user_id_array = find_user_ids_by_fingerprint($fingerprint);
       if (is_array($user_id_array)) {
         foreach($user_id_array as $user_id) {
@@ -109,7 +109,7 @@ function fingerprinting_ajax_request() {
         }
       }
       else {
-        debug('create new user in pipedrive with fingerprint');
+        write_log('create new user in pipedrive with fingerprint');
         $data = '{"name": "Unknown", "visible_to": "3", "26dccb2d4b7b701a77f418266af26599c970a414":"' . $fingerprint . '"}';
         $user = create_pipedrive_user($data);
         record_hit_by_user_id($user["data"]["id"]);
@@ -120,7 +120,7 @@ function fingerprinting_ajax_request() {
 }
 
 function record_hit_by_user_id($user_id) {
-  debug('record hit');
+  write_log('record hit');
   $url = 'https://api.pipedrive.com/v1/activities?api_token=' . DB_PIPEDRIVE_API_KEY;
   $data = '{
     "subject": "Website Hit",
@@ -129,15 +129,15 @@ function record_hit_by_user_id($user_id) {
     "person_id": "' . $user_id . '"
   }';
   $response = curl_request_pipedrive("POST", $url, $data);
-  debug('recorded hit successfully:'.$response['success']);
+  write_log('recorded hit successfully:'.$response['success']);
 }
 
 function find_user_ids_by_fingerprint($fingerprint) {
-  debug('check if finger print exists');
+  write_log('check if finger print exists');
   $url = 'https://api.pipedrive.com/v1/searchResults/field?term=' . $fingerprint . '&exact_match=0&field_type=personField&field_key=26dccb2d4b7b701a77f418266af26599c970a414&return_item_ids=1&start=0&api_token=' . DB_PIPEDRIVE_API_KEY;
   $data = null;
   $response = json_decode(curl_request_pipedrive("GET", $url, $data), true);
-  debug('check if there are any fingerprint matches in pipedrive');
+  write_log('check if there are any fingerprint matches in pipedrive');
   if (isset($response['data'][0]['id'])) {
     $user_id_array = [];
     foreach($response['data'] as $user_id) {
@@ -146,7 +146,7 @@ function find_user_ids_by_fingerprint($fingerprint) {
     return $user_id_array;
   }
   else {
-    debug('cant find fingerprint');
+    write_log('cant find fingerprint');
     return false;
   }
 }
@@ -161,11 +161,11 @@ function merge_2_users($user_id1, $user_id2) {
     $user_to_be_merged = $user_id1;
     $user_id = $user_id2;
   }
-  debug('user ' . $user_to_be_merged . ' to be merged into ' . $user_id);
+  write_log('user ' . $user_to_be_merged . ' to be merged into ' . $user_id);
   $url = 'https://api.pipedrive.com/v1/persons/' . $user_to_be_merged . '/merge?api_token=' . DB_PIPEDRIVE_API_KEY;
   $data = '{"merge_with_id":"' . $user_id . '"}';
   $response = json_decode(curl_request_pipedrive("PUT", $url, $data), true);
-  debug('merged users success status: '.$response['success']);
+  write_log('merged users success status: '.$response['success']);
   $user_fingerprints = get_user_fingerprints_by_id($user_id);
   set_user_fingerprints_by_id($user_fingerprints, $user_id);
   return $user_id;
@@ -173,36 +173,36 @@ function merge_2_users($user_id1, $user_id2) {
 
 // Set's a user's fingerprints
 function set_user_fingerprints_by_id($fingerprints, $user_id) {
-  debug('set user fingerprints');
+  write_log('set user fingerprints');
   $fingerprints = clean_user_fingerprints($fingerprints);
-  debug('flatten array to string');
+  write_log('flatten array to string');
   $fingerprints_string = implode(",",$fingerprints);
-  debug('submit fingerprints to pipedrive');
+  write_log('submit fingerprints to pipedrive');
   $url = 'https://api.pipedrive.com/v1/persons/' . $user_id . '?api_token=' . DB_PIPEDRIVE_API_KEY;
   $data = '{"26dccb2d4b7b701a77f418266af26599c970a414":"' . $fingerprints_string . '"}';
   $response = json_decode(curl_request_pipedrive("PUT", $url, $data), true);
-  debug('added fingerprints to user was a success:'.$response['success']);
+  write_log('added fingerprints to user was a success:'.$response['success']);
 }
 
 // Returns an array of a user's fingerprints
 function get_user_fingerprints_by_id($user_id) {
-  debug('get users fingerprints');
+  write_log('get users fingerprints');
   $url = 'https://api.pipedrive.com/v1/persons/' . $user_id . '?api_token=' . DB_PIPEDRIVE_API_KEY;
   $data = null;
   $user = json_decode(curl_request_pipedrive("GET", $url, $data), true);
   if (isset($user['data']['26dccb2d4b7b701a77f418266af26599c970a414'])) {
-    debug('found a fingerprint!');
+    write_log('found a fingerprint!');
     $user_fingerprints_string = $user['data']['26dccb2d4b7b701a77f418266af26599c970a414'];
     return explode(',', $user_fingerprints_string);
   }
   else {
-    debug('user has no fingerprints');
+    write_log('user has no fingerprints');
     return null;
   }
 }
 
 function clean_user_fingerprints($user_fingerprints) {
-  debug('clean users fingerprints');
+  write_log('clean users fingerprints');
   //remove excess spaces and duplicates
   return array_unique(array_filter(str_replace(' ', '', $user_fingerprints)));
 }
@@ -210,7 +210,7 @@ function clean_user_fingerprints($user_fingerprints) {
 function create_pipedrive_user($data) {
   $url = 'https://api.pipedrive.com/v1/persons?api_token=' . DB_PIPEDRIVE_API_KEY;
   $response = json_decode(curl_request_pipedrive("POST", $url, $data), true);
-  debug('added new user was a success:'.$response['success']);
+  write_log('added new user was a success:'.$response['success']);
   return $response;
 }
 
@@ -226,46 +226,80 @@ function find_user_id_by_email($email) {
   return $response['data']['id'];
 }
 
-function form_submitted() {
-  $email
-  $details
-  $name
-  $company_name
-  $fingerprint
+function log_it( $message ) {
+   if( WP_write_log === true ){
+     if( is_array( $message ) || is_object( $message ) ){
+       error_log( print_r( $message, true ) );
+     } else {
+       error_log( $message );
+     }
+   }
+ }
 
-  $user_id = find_user_id_by_email($email);
-  if (!isset(find_user_id_by_email($email))) {
-    $user_id_array = find_user_ids_by_fingerprint($fingerprint);
-    if (count($user_id_array) >= 2) {
-      $user_id = merge_2_users($user_id_array[0], $user_id_array[1]);
+ if (!function_exists('write_log')) {
+
+     function write_log($log) {
+         if (true === WP_DEBUG_LOG) {
+             if (is_array($log) || is_object($log)) {
+                 error_log(print_r($log, true));
+             } else {
+                 error_log($log);
+             }
+         }
+     }
+
+ }
+
+// add_action( 'wpcf7_before_send_mail', 'form_submitted' );
+add_action( 'wpcf7_submit', 'form_submitted' );
+// apply_filters( 'wpcf7_ajax_json_echo',  $items,  $result );
+function form_submitted($contact_form) {
+  // write_log($contact_form);
+  if (!isset($contact_form->posted_data) && class_exists('WPCF7_Submission')) {
+        $submission = WPCF7_Submission::get_instance();
+        if ($submission) {
+            $formdata = $submission->get_posted_data();
+            // write_log($formdata);
+            $name = $formdata['your-name'];
+            $company = $formdata['company'];
+            $email = $formdata['email'];
+            $message = $formdata['message'];
+        }
     }
-    elseif (isset($user_id_array[0])) {
-      debug('didnt find any duplicates');
-      $user_id = $user_id_array[0];
-    }
-  }
-  elseif (isset(find_user_id_by_email($email))) {
-    $user_fingerprints = get_user_fingerprints_by_id($user_id);
-    array_push($user_fingerprints,$fingerprint);
-    set_user_fingerprints_by_id($user_fingerprints, $user_id);
-    record_hit_by_user_id($user_id);
-    debug('check for duplicates');
-    $user_id_array = find_user_ids_by_fingerprint($fingerprint); //returns array of user ids.
-    if (count($user_id_array) >= 2) {
-      merge_2_users($user_id_array[0], $user_id_array[1]);
-    }
-    else {
-      debug('didnt find any duplicates');
-    }
-  }
-  else {
-    $user_id = create_pipedrive_user('{"name": "' . $name . '", "email": "' . $email . '" "visible_to": "3", "26dccb2d4b7b701a77f418266af26599c970a414":"' . $fingerprint . '"}');
-  }
-  create_deal('{"title": "Website Form Submitted", "person_id": "' . $user_id . '", "visible_to": "3"}');
+    write_log('form submit: '.$_SESSION["fingerprint_session"].' '.$name.' '.$company.' '.$email.' '.$message);
+
+  // if (null == find_user_id_by_email($email)) {
+  //   $user_id_array = find_user_ids_by_fingerprint($fingerprint_global);
+  //   if (count($user_id_array) >= 2) {
+  //     $user_id = merge_2_users($user_id_array[0], $user_id_array[1]);
+  //   }
+  //   elseif (isset($user_id_array[0])) {
+  //     write_log('didnt find any duplicates');
+  //     $user_id = $user_id_array[0];
+  //   }
+  // }
+  // elseif (null !== find_user_id_by_email($email)) {
+  //   $user_fingerprints = get_user_fingerprints_by_id($user_id);
+  //   array_push($user_fingerprints,$fingerprint);
+  //   set_user_fingerprints_by_id($user_fingerprints, $user_id);
+  //   record_hit_by_user_id($user_id);
+  //   write_log('check for duplicates');
+  //   $user_id_array = find_user_ids_by_fingerprint($fingerprint); //returns array of user ids.
+  //   if (count($user_id_array) >= 2) {
+  //     merge_2_users($user_id_array[0], $user_id_array[1]);
+  //   }
+  //   else {
+  //     write_log('didnt find any duplicates');
+  //   }
+  // }
+  // else {
+  //   $user_id = create_pipedrive_user('{"name": "' . $name . '", "email": "' . $email . '" "visible_to": "3", "26dccb2d4b7b701a77f418266af26599c970a414":"' . $fingerprint . '"}');
+  // }
+  // create_deal('{"title": "Website Form Submitted", "person_id": "' . $user_id . '", "visible_to": "3"}');
 }
 
 function curl_request_pipedrive($request_type, $url, $data) {
-  debug('calling pipedrive');
+  write_log('calling pipedrive');
   $ch = curl_init($url);
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
   curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $request_type);
