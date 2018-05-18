@@ -54,6 +54,8 @@
    // }
    // add_action( 'wp_enqueue_scripts', 'enqueue_scripts' );
 
+   include(plugin_dir_path( __FILE__ ) . 'gated_content.php');
+
    add_action('init', 'myStartSession', 1);
     function myStartSession() {
         if(!session_id()) {
@@ -84,6 +86,7 @@ function fingerprinting_ajax_request() {
     $company_id = $_REQUEST['company_id'];
     $fingerprint_global = $fingerprint;
     $_SESSION["fingerprint_session"] = $fingerprint;
+    if(isset($user_id)) {$_SESSION["user_id"] = $user_id;}
     write_log('fingerprint: '.$fingerprint.' user id: '.$user_id.' company id: '.$company_id);
     if (isset($user_id) && isset($fingerprint)) {
       write_log('found finerprint and user id');
@@ -132,6 +135,23 @@ function record_hit_by_user_id($user_id) {
   write_log('recorded hit successfully:'.$response['success']);
 }
 
+function record_form_submission($user_id, $deal_id, $message) {
+  write_log('record form submission');
+  $url = 'https://api.pipedrive.com/v1/activities?api_token=' . DB_PIPEDRIVE_API_KEY;
+  $data = '{
+    "subject": "Website Form Submission",
+    "done": "1",
+    "type": "website_form_submission",
+    "deal_id": "' . $deal_id . '",
+    "person_id": "' . $user_id . '",
+    "note": "' . $message . '"
+  }';
+  write_log($data);
+  $response = curl_request_pipedrive("POST", $url, $data);
+  // write_log('recorded web form submission details successfully: ' . $response["success"]);
+  // return $response;
+}
+
 function find_user_ids_by_fingerprint($fingerprint) {
   write_log('check if finger print exists');
   $url = 'https://api.pipedrive.com/v1/searchResults/field?term=' . $fingerprint . '&exact_match=0&field_type=personField&field_key=26dccb2d4b7b701a77f418266af26599c970a414&return_item_ids=1&start=0&api_token=' . DB_PIPEDRIVE_API_KEY;
@@ -176,10 +196,10 @@ function set_user_fingerprints_by_id($fingerprints, $user_id) {
   write_log('set user fingerprints');
   $fingerprints = clean_user_fingerprints($fingerprints);
   write_log('flatten array to string');
-  $fingerprints_string = implode(",",$fingerprints);
+  $fingerprints = implode(",",$fingerprints);
   write_log('submit fingerprints to pipedrive');
   $url = 'https://api.pipedrive.com/v1/persons/' . $user_id . '?api_token=' . DB_PIPEDRIVE_API_KEY;
-  $data = '{"26dccb2d4b7b701a77f418266af26599c970a414":"' . $fingerprints_string . '"}';
+  $data = '{"26dccb2d4b7b701a77f418266af26599c970a414":"' . $fingerprints . '"}';
   $response = json_decode(curl_request_pipedrive("PUT", $url, $data), true);
   write_log('added fingerprints to user was a success:'.$response['success']);
 }
@@ -214,27 +234,22 @@ function create_pipedrive_user($data) {
   return $response;
 }
 
-function create_deal() {
-  $url = 'https://api.pipedrive.com/v1/deals?api_token=' . DB_PIPEDRIVE_API_KEY;
 
-}
 
 function find_user_id_by_email($email) {
+  write_log('find user by email');
   $url = 'https://api.pipedrive.com/v1/persons/find?term=' . $email . '&start=0&search_by_email=1&api_token=' . DB_PIPEDRIVE_API_KEY;
   $data = null;
   $response = json_decode(curl_request_pipedrive("GET", $url, $data), true);
-  return $response['data']['id'];
+  if (isset($response['data'][0]['id'])) {
+    write_log('found user by email!');
+    return $response['data'][0]['id'];
+  }
+  else{ write_log('cant find user by email '.$email); return null; }
+
 }
 
-function log_it( $message ) {
-   if( WP_write_log === true ){
-     if( is_array( $message ) || is_object( $message ) ){
-       error_log( print_r( $message, true ) );
-     } else {
-       error_log( $message );
-     }
-   }
- }
+
 
  if (!function_exists('write_log')) {
 
@@ -250,53 +265,7 @@ function log_it( $message ) {
 
  }
 
-// add_action( 'wpcf7_before_send_mail', 'form_submitted' );
-add_action( 'wpcf7_submit', 'form_submitted' );
-// apply_filters( 'wpcf7_ajax_json_echo',  $items,  $result );
-function form_submitted($contact_form) {
-  // write_log($contact_form);
-  if (!isset($contact_form->posted_data) && class_exists('WPCF7_Submission')) {
-        $submission = WPCF7_Submission::get_instance();
-        if ($submission) {
-            $formdata = $submission->get_posted_data();
-            // write_log($formdata);
-            $name = $formdata['your-name'];
-            $company = $formdata['company'];
-            $email = $formdata['email'];
-            $message = $formdata['message'];
-        }
-    }
-    write_log('form submit: '.$_SESSION["fingerprint_session"].' '.$name.' '.$company.' '.$email.' '.$message);
 
-  // if (null == find_user_id_by_email($email)) {
-  //   $user_id_array = find_user_ids_by_fingerprint($fingerprint_global);
-  //   if (count($user_id_array) >= 2) {
-  //     $user_id = merge_2_users($user_id_array[0], $user_id_array[1]);
-  //   }
-  //   elseif (isset($user_id_array[0])) {
-  //     write_log('didnt find any duplicates');
-  //     $user_id = $user_id_array[0];
-  //   }
-  // }
-  // elseif (null !== find_user_id_by_email($email)) {
-  //   $user_fingerprints = get_user_fingerprints_by_id($user_id);
-  //   array_push($user_fingerprints,$fingerprint);
-  //   set_user_fingerprints_by_id($user_fingerprints, $user_id);
-  //   record_hit_by_user_id($user_id);
-  //   write_log('check for duplicates');
-  //   $user_id_array = find_user_ids_by_fingerprint($fingerprint); //returns array of user ids.
-  //   if (count($user_id_array) >= 2) {
-  //     merge_2_users($user_id_array[0], $user_id_array[1]);
-  //   }
-  //   else {
-  //     write_log('didnt find any duplicates');
-  //   }
-  // }
-  // else {
-  //   $user_id = create_pipedrive_user('{"name": "' . $name . '", "email": "' . $email . '" "visible_to": "3", "26dccb2d4b7b701a77f418266af26599c970a414":"' . $fingerprint . '"}');
-  // }
-  // create_deal('{"title": "Website Form Submitted", "person_id": "' . $user_id . '", "visible_to": "3"}');
-}
 
 function curl_request_pipedrive($request_type, $url, $data) {
   write_log('calling pipedrive');
