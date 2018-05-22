@@ -1,14 +1,16 @@
 <?php
  class Pipedrive {
 
-   protected function get_user() {
-
+   protected function get_user($user_id) {
+     $url = 'https://api.pipedrive.com/v1/persons/' . $user_id . '?api_token=' . DB_PIPEDRIVE_API_KEY;
+     $data = null;
+     return pipedrive_api("GET", $url, $data);
    }
 
-   protected function find_users($field_key, $field_term) {
+   function find_users($field_key, $field_term) {
      $url = 'https://api.pipedrive.com/v1/searchResults/field?term=' . $fingerprint . '&exact_match=0&field_type=personField&field_key=&return_item_ids=1&start=0&api_token=' . DB_PIPEDRIVE_API_KEY;
      $data = null;
-     $response = pipedrive_api("GET", $url, $data)
+     $response = pipedrive_api("GET", $url, $data);
    }
 
    protected function create_person($data) {
@@ -61,7 +63,7 @@
 class Persons extends Pipedrive {
   public function find_user_ids_by_fingerprint($fingerprint) {
     write_log('get users by fingerprint');
-    $user_ids = find_users('26dccb2d4b7b701a77f418266af26599c970a414', $fingerprint);
+    $user_ids = Pipedrive::find_users('26dccb2d4b7b701a77f418266af26599c970a414', $fingerprint);
     if (isset($response['data'][0]['id'])) {
       $user_id_array = [];
       foreach($response['data'] as $user_id) {
@@ -71,6 +73,20 @@ class Persons extends Pipedrive {
     }
     else {
       write_log('cant find fingerprint in pipedrive');
+      return null;
+    }
+  }
+
+  public function get_user_fingerprints_by_id($user_id) {
+    write_log('get users fingerprints');
+    $user = get_user($user_id);
+    if (isset($user['data']['26dccb2d4b7b701a77f418266af26599c970a414'])) {
+      write_log('found a fingerprint!');
+      $user_fingerprints_string = $user['data']['26dccb2d4b7b701a77f418266af26599c970a414'];
+      return explode(',', $user_fingerprints_string);
+    }
+    else {
+      write_log('user has no fingerprints');
       return null;
     }
   }
@@ -97,7 +113,7 @@ class Persons extends Pipedrive {
     write_log('set user fingerprints');
     $fingerprints = Processing::clean_user_fingerprints($fingerprints);
     $data = '{"26dccb2d4b7b701a77f418266af26599c970a414":"' . $fingerprints . '"}';
-    $response = update_user($user_id, $data)
+    $response = update_user($user_id, $data);
     write_log('added fingerprints to user was a success:'.$response['success']);
   }
 
@@ -131,12 +147,15 @@ class Persons extends Pipedrive {
 }
 
 class Activity extends Pipedrive {
-  $subject = '';
-  $done = '1';
-  $type = '';
-  $deal_id = '';
-  $user_id = '';
-  $message = '';
+  function __construct () {
+    $subject = '';
+    $done = '1';
+    $type = '';
+    $deal_id = '';
+    $user_id = '';
+    $message = '';
+  }
+
   function record_hit_by_user_id($user_id) {
     write_log('record hit');
     $subject = 'Website Hit';
