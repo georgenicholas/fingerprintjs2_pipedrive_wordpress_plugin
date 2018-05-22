@@ -31,6 +31,7 @@
   ----- if the fingerprints match, it does nothing
   ----- if the fingerprints don't match, it adds the new fingerprint to the array with the old fingerprints and adds those to the user
   ---
+  this is interesting: https://github.com/IsraelOrtuno/pipedrive/tree/master/src/Resources
   */
 
   // function enqueue_scripts() {
