@@ -114,6 +114,8 @@ class Persons extends Pipedrive {
     $user_fingerprints = Persons::get_user_fingerprints_by_id($master_record['data']['id']);
     Persons::set_user_fingerprints_by_id($user_fingerprints, $master_record['data']['id']);
     write_log('master record ID: '.$master_record['data']['id']);
+    $_SESSION["user_id"] = $master_record['data']['id'];
+    $_SESSION["fingerprint_session"] = $user_fingerprints;
     return $master_record['data']['id'];
   }
 

@@ -41,18 +41,19 @@
   // }
   // add_action( 'wp_enqueue_scripts', 'enqueue_scripts' );
 
-  include(plugin_dir_path( __FILE__ ) . 'gated_content.php');
-  include(plugin_dir_path( __FILE__ ) . 'pipedrive_functions.php');
-  include(plugin_dir_path( __FILE__ ) . 'data_processing.php');
-  include(plugin_dir_path( __FILE__ ) . 'assets.php');
-  include(plugin_dir_path( __FILE__ ) . 'ajax_functions.php');
+  // include(plugin_dir_path( __FILE__ ) . 'gated_content.php'); TODO refactor this file
+
 
   add_action('init', 'myStartSession', 1);
   function myStartSession() {
     if(!session_id()) {
+      write_log('session id: '.session_id());
       session_start();
+      write_log('session id: '.session_id());
     }
   }
+
+
 
   if (!function_exists('write_log')) {
     function write_log($log) {
@@ -66,6 +67,14 @@
     }
   }
 
+  include(plugin_dir_path( __FILE__ ) . 'pipedrive_functions.php');
+  include(plugin_dir_path( __FILE__ ) . 'data_processing.php');
+  include(plugin_dir_path( __FILE__ ) . 'cookies.php');
+
   write_log('#########################################################New Test##############################################################');
+
+
+
+
 
 ?>
