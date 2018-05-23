@@ -18,7 +18,9 @@ function fingerprinting_ajax_request() {
       write_log('check for duplicates');
       $user_id_array = Persons::find_user_ids_by_fingerprint($fingerprint); //returns array of user ids.
       if (count($user_id_array) >= 2) {
-        Persons::merge_2_users($user_id_array[0], $user_id_array[1]);
+        $user_array = [];
+        foreach($user_id_array as $this) { array_push($user_array, Persons::get_pipedrive_user($this)); };
+        Persons::merge_pipedrive_users($user_array);
       }
       else {
         write_log('didnt find any duplicates');
