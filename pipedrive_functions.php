@@ -44,7 +44,7 @@
  }
 
 class Persons extends Pipedrive {
-
+  // TODO make this class object oriented.
   // returns user id.
   public static function find_user_id_by_fingerprint($fingerprint) {
     write_log('get user by fingerprint');
