@@ -3,25 +3,29 @@
 function fingerprinting_ajax_request() {
   if ( isset($_REQUEST) ) {
     // set session variables (these will expire on each page load as not to destroy cacheing)
-    if(isset($_REQUEST['fingerprint'])) { $_SESSION["fingerprint_session"] = $_REQUEST['fingerprint']; } else { $_SESSION["fingerprint_session"] = null; }
+    // if(isset($_REQUEST['fingerprint'])) { $_SESSION["fingerprint_session"] = $_REQUEST['fingerprint']; } else { $_SESSION["fingerprint_session"] = null; }
+    //
+    // if(isset($_REQUEST['user_id'])) { $_SESSION["user_id"] = $_REQUEST['user_id']; $_COOKIE['user_id'] = $_REQUEST['user_id']; }
+    // elseif(isset($_COOKIE['user_id'])) { $_SESSION["user_id"] = $_COOKIE['user_id']; }
+    // else { $_SESSION["user_id"] = null; }
+    //
+    // if(isset($_REQUEST['company_id'])) { $company_id = $_REQUEST['company_id']; } else { $company_id = null; }
 
-    if(isset($_REQUEST['user_id'])) { $_SESSION["user_id"] = $_REQUEST['user_id']; $_COOKIE['user_id'] = $_REQUEST['user_id']; }
-    elseif(isset($_COOKIE['user_id'])) { $_SESSION["user_id"] = $_COOKIE['user_id']; }
-    else { $_SESSION["user_id"] = null; }
-
-    if(isset($_REQUEST['company_id'])) { $company_id = $_REQUEST['company_id']; } else { $company_id = null; }
-
-    if (isset($_SESSION["user_id"]) && isset($_SESSION["fingerprint_session"])) {
-      write_log('found finerprint and user id');
+    if (isset($_REQUEST['user_id']) && isset($_REQUEST['fingerprint'])) {
+      $user = new Person;
+      if (isset($_REQUEST['user_id'])) { $user -> set_id($_SESSION["user_id"]); }
+      if (isset($_REQUEST['fingerprint'])) { $user -> set_fingerprint($_REQUEST['fingerprint']); }
+      $user -> get_fingerprints();
+      Person::find_and_merge($user->id);
       // log website hit
       $activity = new Activity;
       $activity -> set_subject('Website Hit');
       $activity -> set_type('website_hit');
-      $activity -> set_user_id($_SESSION["user_id"]);
+      $activity -> set_user_id($user->id);
       $activity -> create_activity();
       unset($activity);
       // log fingerprint on user
-      Persons::set_user_fingerprints_by_id($_SESSION["fingerprint_session"], $_SESSION["user_id"]);
+
       // attempt to merge any duplicates.  finding users always calls a merge function.
       Persons::find_user_id_by_fingerprint($_SESSION["fingerprint_session"]);
     }

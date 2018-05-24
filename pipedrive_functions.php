@@ -43,10 +43,79 @@
    }
  }
 
-class Persons extends Pipedrive {
-  // TODO make this class object oriented.
-  // returns user id.
-  public static function find_user_id_by_fingerprint($fingerprint) {
+class Person extends Pipedrive {
+
+  public $fingerprint;
+  public $id;
+  public $email;
+  public $name;
+  public $user;
+  private $fingerprint_string;
+  private $fingerprint_array;
+
+  public function set_fingerprint($data) {$this->fingerprint = $data; }
+  public function set_id($data) {
+    $this->id = $data;
+    if (!isset($this->user)) { $this->user = get_user($this->id); }
+  }
+  public function set_email($data) {$this->email = $data; }
+  public function set_name($data) {$this->name = $data; }
+  public function set_user($data) {$this->user = $data; }
+
+  public function get_fingerprints() {
+    write_log('set users fingerprints');
+    $this->fingerprint_string = $this->fingerprint + ',' + $this->user['data']['26dccb2d4b7b701a77f418266af26599c970a414'];
+    clean_fingerprints();
+  }
+
+  public static function find_and_merge() {
+    $duplicates= [];
+    foreach($user->fingerprints_array as $fingerprint) {
+      $response = parent::find_users(['26dccb2d4b7b701a77f418266af26599c970a414'], $fingerprint);
+      foreach($response['data'] as $duplicate) {
+        array_push($duplicates, parent::get_user($duplicate['id']));
+      }
+    }
+
+
+
+
+
+  }
+
+  private function clean_fingerprints() {
+    write_log('clean users fingerprints');
+    $this->fingerprint_array = array_unique(array_filter(str_replace(' ', '', explode(',', $this->fingerprint))));
+    $this->fingerprint_string = implode(",",$this->fingerprint_array);
+  }
+
+
+  public static function get_user_fingerprints_by_id($user_id) {
+    write_log('get users fingerprints');
+    $user = Pipedrive::get_user($user_id);
+    if (isset($user['data']['26dccb2d4b7b701a77f418266af26599c970a414'])) {
+      write_log('found a fingerprint!');
+      $user_fingerprints_string = $user['data']['26dccb2d4b7b701a77f418266af26599c970a414'];
+      return explode(',', $user_fingerprints_string);
+    }
+    else {
+      write_log('user has no fingerprints');
+      return null;
+    }
+  }
+
+  public static function set_user_fingerprints_by_id($fingerprint, $user_id) {
+    $fingerprints = [];
+    foreach(Persons::get_user_fingerprints_by_id($user_id) as $this) { array_push($fingerprints, $this); }
+    array_push($fingerprints, $fingerprint);
+    write_log('set user fingerprints');
+    $fingerprints = Processing::clean_user_fingerprints($fingerprints);
+    $data = '{"26dccb2d4b7b701a77f418266af26599c970a414":"' . $fingerprints . '"}';
+    $response = Pipedrive::update_user($user_id, $data);
+    write_log('added fingerprints to user was a success:'.$response['success']);
+  }
+
+  public function find_user_id_by_fingerprint($fingerprint) {
     write_log('get user by fingerprint');
     return Persons::find_user('26dccb2d4b7b701a77f418266af26599c970a414', $fingerprint);
   }
@@ -125,16 +194,7 @@ class Persons extends Pipedrive {
   }
 
   // accepts a fingerprint and a user id.
-  public static function set_user_fingerprints_by_id($fingerprint, $user_id) {
-    $fingerprints = [];
-    foreach(Persons::get_user_fingerprints_by_id($user_id) as $this) { array_push($fingerprints, $this); }
-    array_push($fingerprints, $fingerprint);
-    write_log('set user fingerprints');
-    $fingerprints = Processing::clean_user_fingerprints($fingerprints);
-    $data = '{"26dccb2d4b7b701a77f418266af26599c970a414":"' . $fingerprints . '"}';
-    $response = Pipedrive::update_user($user_id, $data);
-    write_log('added fingerprints to user was a success:'.$response['success']);
-  }
+
 
   public static function create_pipedrive_user($data) {
     write_log('creating user');

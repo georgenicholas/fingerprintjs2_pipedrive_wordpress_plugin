@@ -3,11 +3,8 @@
 class Processing {
   // accepts an array of fingerprints
   // returns a string
-  public static function clean_user_fingerprints($user_fingerprints) {
-    write_log('clean users fingerprints');
-    //remove excess spaces and duplicates
-    $user_fingerprints = array_unique(array_filter(str_replace(' ', '', $user_fingerprints)));
-    return implode(",",$user_fingerprints);
+  public static function clean_user_fingerprints() {
+    
   }
 
   // take an array of users, and order the array from the master record to those to be merged.
