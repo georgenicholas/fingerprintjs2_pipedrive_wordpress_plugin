@@ -41,15 +41,23 @@
   // }
   // add_action( 'wp_enqueue_scripts', 'enqueue_scripts' );
 
-  // include(plugin_dir_path( __FILE__ ) . 'gated_content.php'); TODO refactor this file
 
 
-  add_action('init', 'myStartSession', 1);
+
+
+
+  add_action('init', 'myStartSession');
   function myStartSession() {
     if(!session_id()) {
-      write_log('session id: '.session_id());
       session_start();
-      write_log('session id: '.session_id());
+    }
+    if (isset($_GET['user_id'])) {
+      write_log('no user id cookie set');
+      setcookie("user_id", $_GET['user_id'], time()+315360000);
+    }
+    if (isset($_SESSION['fingerprint'])) {
+      // just FYI this doesn't work.
+      setcookie("fingerprint", $_SESSION['fingerprint'], time()+315360000);
     }
   }
 
@@ -67,13 +75,25 @@
     }
   }
 
+  include(plugin_dir_path( __FILE__ ) . 'gated_content.php');
   include(plugin_dir_path( __FILE__ ) . 'pipedrive_functions.php');
   include(plugin_dir_path( __FILE__ ) . 'data_processing.php');
-  include(plugin_dir_path( __FILE__ ) . 'cookies.php');
+
+
+  if (isset($_COOKIE["PHPSESSID"]) && true != WP_DEBUG_LOG) {
+    write_log('already logged this persons fingerprint');
+  }
+  elseif (isset($_COOKIE["PHPSESSID"]) && true === WP_DEBUG_LOG) {
+    write_log('already logged this persons fingerprint, but will run program anyways for testing purposes');
+    include(plugin_dir_path( __FILE__ ) . 'assets.php');
+    include(plugin_dir_path( __FILE__ ) . 'ajax_functions.php');
+  }
+  else {
+    include(plugin_dir_path( __FILE__ ) . 'assets.php');
+    include(plugin_dir_path( __FILE__ ) . 'ajax_functions.php');
+  }
 
   write_log('#########################################################New Test##############################################################');
-
-
 
 
 
