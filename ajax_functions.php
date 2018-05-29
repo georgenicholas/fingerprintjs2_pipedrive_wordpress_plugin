@@ -29,13 +29,23 @@ function fingerprinting_ajax_request() {
       write_log('no user id present, using fingerprint only');
       $user_id = Persons::find_user_id_by_fingerprint($_SESSION["fingerprint_session"]);
       if (isset($user_id)) {
-        Activity::record_hit_by_user_id($user_id);
+        $activity = new Activity;
+        $activity -> set_subject('Website Hit');
+        $activity -> set_type('website_hit');
+        $activity -> set_user_id($user_id);
+        $activity -> create_activity();
+        unset($activity);
       }
       else {
         write_log('create new user in pipedrive with fingerprint');
         $data = '{"name": "Unknown", "visible_to": "3", "26dccb2d4b7b701a77f418266af26599c970a414":"' . $_SESSION["fingerprint_session"] . '"}';
         $user = Persons::create_pipedrive_user($data);
-        Activity::record_hit_by_user_id($user["data"]["id"]);
+        $activity = new Activity;
+        $activity -> set_subject('Website Hit');
+        $activity -> set_type('website_hit');
+        $activity -> set_user_id($user["data"]["id"]);
+        $activity -> create_activity();
+        unset($activity);
       }
     }
   }

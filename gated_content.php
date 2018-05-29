@@ -15,10 +15,14 @@ function form_submitted($contact_form) {
         if ($submission) {
             $formdata = $submission->get_posted_data();
             // write_log($formdata);
-            $name = $formdata['your-name'];
-            $company = $formdata['company'];
-            $email = $formdata['email'];
-            $message = $formdata['message'];
+            if (isset($formdata['your-name'])) { $name = $formdata['your-name']; }
+            else { $name = null; }
+            if (isset($formdata['company'])) { $company = $formdata['company']; }
+            else { $company = null; }
+            if (isset($formdata['email'])) { $email = $formdata['email']; }
+            else { $email = null; }
+            if (isset($formdata['message'])) { $message = $formdata['message']; }
+            else { $message = null; }
         }
     }
 
@@ -27,18 +31,16 @@ function form_submitted($contact_form) {
   if (!isset($_SESSION["user_id"]) && !isset($_COOKIE['user_id'])) {
     write_log('no user_id in the session or cookie variables');
     $user_id = Persons::find_user_id_by_email($email);
+    if (!isset($user_id)) {
+      $user_id = Persons::find_user_id_by_fingerprint($_SESSION["fingerprint_session"]);
+    }
   }
   // else if one of the user ids is set from session or cookies, set user_id with it.
   elseif (isset($_SESSION["user_id"])) { $user_id = $_SESSION["user_id"]; }
   elseif (isset($_COOKIE['user_id'])) { $user_id = $_COOKIE['user_id']; }
-  // else if it can find the user by the fingerprint.
-  else {
-    write_log('cant find submitting user by email, session id or cookie id.');
-    $user_id = Persons::find_user_id_by_fingerprint($_SESSION["fingerprint_session"]);
-  }
 
   if (!isset($user_id)) {
-    write_log('couldnt find user by fingerprint, email, cookies or sessions, create a new user');
+    write_log('couldnt find user by fingerprint, email, cookies or sessions');
     $user = Persons::create_pipedrive_user('{"name": "' . $name . '", "email": "' . $email . '", "visible_to": "3", "26dccb2d4b7b701a77f418266af26599c970a414":"' . $_SESSION["fingerprint_session"] . '"}');
     $user_id = $user['data']['id'];
   }
@@ -49,16 +51,12 @@ function form_submitted($contact_form) {
   $deal -> set_person_id($user_id);
   $deal -> create_deal();
 
-  // $deal = create_deal('{"title": "Website Form Submitted", "person_id": "' . $user_id . '", "visible_to": "3", "pipeline_id": "13"}');
-  //remove page breaks, they break the pipedrive API
-
-  // record_form_submission($user_id, $deal['data']['id'], 'Name: '  . $name . '<br>Company: ' . $company . '<br>Email: ' . $email . '<br><br>' . $message );
   $activity = new Activity;
   $activity -> set_subject('Website Form Submission');
   $activity -> set_type('website_form_submission');
   $activity -> set_user_id($user_id);
   $activity -> set_deal_id($deal->return['data']['id']);
-  $activity -> set_message($message);
+  $activity -> set_message('Name: ' . $name . '<br>Email: ' . $email . '<br>Company: ' . $company . '<br>Message: ' .$message);
   $activity -> create_activity();
   unset($activity);
   unset($deal);

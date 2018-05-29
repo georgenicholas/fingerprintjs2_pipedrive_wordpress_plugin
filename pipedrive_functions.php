@@ -100,7 +100,7 @@ class Persons extends Pipedrive {
     // Persons::set_user_fingerprints_by_id($user_fingerprints, $master_record['data']['id']);
     write_log('master record ID: '.$master_record['data']['id']);
     $_SESSION["user_id"] = $master_record['data']['id'];
-    $_SESSION["fingerprint_session"] = $user_fingerprints;
+    if (isset($user_fingerprints)) {$_SESSION["fingerprint_session"] = $user_fingerprints;}
     return $master_record;
   }
 
@@ -127,7 +127,8 @@ class Persons extends Pipedrive {
   // accepts a fingerprint and a user id.
   public static function set_user_fingerprints_by_id($fingerprint, $user_id) {
     $fingerprints = [];
-    foreach(Persons::get_user_fingerprints_by_id($user_id) as $this) { array_push($fingerprints, $this); }
+    $old_fingerprints = Persons::get_user_fingerprints_by_id($user_id);
+    if (isset($old_fingerprints)) { foreach($old_fingerprints as $this) { array_push($fingerprints, $this); } }
     array_push($fingerprints, $fingerprint);
     write_log('set user fingerprints');
     $fingerprints = Processing::clean_user_fingerprints($fingerprints);
