@@ -78,20 +78,22 @@
   include(plugin_dir_path( __FILE__ ) . 'gated_content.php');
   include(plugin_dir_path( __FILE__ ) . 'pipedrive_functions.php');
   include(plugin_dir_path( __FILE__ ) . 'data_processing.php');
+  include(plugin_dir_path( __FILE__ ) . 'assets.php');
+  include(plugin_dir_path( __FILE__ ) . 'ajax_functions.php');
 
 
-  if (isset($_COOKIE["PHPSESSID"]) && true != WP_DEBUG_LOG) {
-    write_log('already logged this persons fingerprint');
-  }
-  elseif (isset($_COOKIE["PHPSESSID"]) && true === WP_DEBUG_LOG) {
-    write_log('already logged this persons fingerprint, but will run program anyways for testing purposes');
-    include(plugin_dir_path( __FILE__ ) . 'assets.php');
-    include(plugin_dir_path( __FILE__ ) . 'ajax_functions.php');
-  }
-  else {
-    include(plugin_dir_path( __FILE__ ) . 'assets.php');
-    include(plugin_dir_path( __FILE__ ) . 'ajax_functions.php');
-  }
+  // if (isset($_COOKIE["PHPSESSID"]) && true != WP_DEBUG_LOG) {
+  //   write_log('already logged this persons fingerprint');
+  // }
+  // elseif (isset($_COOKIE["PHPSESSID"]) && true === WP_DEBUG_LOG) {
+  //   write_log('already logged this persons fingerprint, but will run program anyways for testing purposes');
+  //   include(plugin_dir_path( __FILE__ ) . 'assets.php');
+  //   include(plugin_dir_path( __FILE__ ) . 'ajax_functions.php');
+  // }
+  // else {
+  //   include(plugin_dir_path( __FILE__ ) . 'assets.php');
+  //   include(plugin_dir_path( __FILE__ ) . 'ajax_functions.php');
+  // }
 
   write_log('#########################################################New Test##############################################################');
 
